@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { UserMenu } from '@/components/user-menu'
 
 export function Header() {
   const [isDark, setIsDark] = useState(false)
@@ -66,9 +67,7 @@ export function Header() {
             {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </Button>
 
-          <Button className="bg-gradient-to-r from-yellow-400 to-amber-500 text-gray-900 hover:from-yellow-500 hover:to-amber-600">
-            Launch Now
-          </Button>
+          <UserMenu />
         </div>
       </div>
     </header>

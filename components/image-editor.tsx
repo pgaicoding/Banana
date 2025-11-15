@@ -4,12 +4,15 @@ import { useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Card } from '@/components/ui/card'
-import { Upload, ImageIcon, Sparkles } from 'lucide-react'
+import { Upload, ImageIcon, Sparkles, Loader2 } from 'lucide-react'
 
 export function ImageEditor() {
   const [images, setImages] = useState<File[]>([])
   const [prompt, setPrompt] = useState('')
   const [isDragging, setIsDragging] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generatedResult, setGeneratedResult] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -40,6 +43,64 @@ export function ImageEditor() {
 
   const removeImage = (index: number) => {
     setImages(prev => prev.filter((_, i) => i !== index))
+  }
+
+  // Convert image File to base64 data URL
+  const fileToDataURL = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleGenerate = async () => {
+    // Validation
+    if (images.length === 0) {
+      setError('Please upload at least one image')
+      return
+    }
+
+    if (!prompt.trim()) {
+      setError('Please enter a prompt')
+      return
+    }
+
+    setIsGenerating(true)
+    setError(null)
+    setGeneratedResult(null)
+
+    try {
+      // Convert first image to base64 data URL
+      const imageDataURL = await fileToDataURL(images[0])
+
+      // Call API
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: prompt,
+          imageUrl: imageDataURL
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate')
+      }
+
+      // Use the generated image if available, otherwise use the text result
+      setGeneratedResult(data.image || data.result)
+    } catch (err: any) {
+      console.error('Generation error:', err)
+      setError(err.message || 'Failed to generate. Please try again.')
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   return (
@@ -133,10 +194,29 @@ export function ImageEditor() {
                 />
               </div>
 
-              <Button className="w-full bg-gradient-to-r from-yellow-400 to-amber-500 text-gray-900 hover:from-yellow-500 hover:to-amber-600">
-                <Sparkles className="mr-2 h-4 w-4" />
-                Generate Now
+              <Button
+                className="w-full bg-gradient-to-r from-yellow-400 to-amber-500 text-gray-900 hover:from-yellow-500 hover:to-amber-600"
+                onClick={handleGenerate}
+                disabled={isGenerating || images.length === 0 || !prompt.trim()}
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Generate Now
+                  </>
+                )}
               </Button>
+
+              {error && (
+                <div className="rounded-md bg-red-50 dark:bg-red-950 p-3 text-sm text-red-800 dark:text-red-200">
+                  {error}
+                </div>
+              )}
             </div>
           </Card>
 
@@ -148,17 +228,54 @@ export function ImageEditor() {
             </div>
 
             <div className="flex min-h-[400px] items-center justify-center rounded-lg border border-border bg-muted/20">
-              <div className="text-center">
-                <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                  <ImageIcon className="h-8 w-8 text-muted-foreground" />
+              {isGenerating ? (
+                <div className="text-center">
+                  <Loader2 className="mx-auto mb-3 h-16 w-16 animate-spin text-yellow-600 dark:text-yellow-400" />
+                  <p className="mb-1 text-sm font-medium text-foreground">
+                    Generating with AI...
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    This may take a few moments
+                  </p>
                 </div>
-                <p className="mb-1 text-sm font-medium text-foreground">
-                  Ready for instant generation
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Enter your prompt and unleash the power
-                </p>
-              </div>
+              ) : generatedResult ? (
+                <div className="w-full p-4">
+                  {/* Check if result is an image (base64 data URL) or text */}
+                  {generatedResult.startsWith('data:image') ? (
+                    <div className="rounded-lg overflow-hidden">
+                      <img
+                        src={generatedResult}
+                        alt="Generated result"
+                        className="w-full h-auto rounded-lg"
+                      />
+                    </div>
+                  ) : (
+                    <div className="rounded-lg bg-white dark:bg-gray-800 p-4 shadow-md">
+                      <h4 className="mb-2 font-semibold text-foreground">AI Response:</h4>
+                      <p className="text-sm text-foreground whitespace-pre-wrap">{generatedResult}</p>
+                    </div>
+                  )}
+                  <Button
+                    onClick={() => setGeneratedResult(null)}
+                    variant="outline"
+                    className="mt-4"
+                  >
+                    Generate Another
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                  <p className="mb-1 text-sm font-medium text-foreground">
+                    Ready for instant generation
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Upload an image and enter your prompt to begin
+                  </p>
+                </div>
+              )}
             </div>
           </Card>
         </div>
