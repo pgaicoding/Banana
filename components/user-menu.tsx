@@ -17,6 +17,9 @@ import Link from 'next/link'
 export function UserMenu() {
   const { data: session, status } = useSession()
 
+  // Debug logging
+  console.log('UserMenu - status:', status, 'session:', session)
+
   if (status === 'loading') {
     return (
       <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700" />
